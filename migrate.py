@@ -4,13 +4,16 @@
 import sys
 
 from sqlalchemy import (
-    create_engine,
-)
-from sqlalchemy.schema import MetaData
+    create_engine, )
+from sqlalchemy.schema import (
+    MetaData,
+    Table, )
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 
 if len(sys.argv) < 3:
-    print("Usage: %s postgresql://tm2user:pwd@localhost/tm2db postgresql://tm3user:pwd@localhost/tm3db" % sys.argv[0])  # noqa
+    print("Usage: %s postgresql://tm2user:pwd@localhost/tm2db "
+          "postgresql://tm3user:pwd@localhost/tm3db" % sys.argv[0])
     sys.exit(2)
 
 tm2_url = sys.argv[1]
@@ -38,26 +41,143 @@ def failure(msg):
     print(bcolors.FAIL + msg + bcolors.ENDC)
 
 
+def reflect_table_to_declarative(metadata, tablename):
+    """Reflects the table to declarative
+    """
+    Base = declarative_base()
+    Base.metadata = metadata
+
+    metadata.reflect()
+
+    tableobj = Table(tablename, metadata, autoload=True)
+    return type(str(tablename), (Base, ), {'__table__': tableobj})
+
+
+# Print iterations progress
+def printProgressBar(iteration,
+                     total,
+                     prefix='',
+                     suffix='',
+                     decimals=1,
+                     length=100,
+                     fill='█'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(
+        100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
+    # Print New Line on Complete
+    if iteration == total:
+        print()
+
+
 # v2
-metadata_v2 = MetaData()
 engine_v2 = create_engine(tm2_url)
-session_v2 = sessionmaker(bind=engine_v2)()
-metadata_v2.reflect(bind=engine_v2)
-projects_v2 = metadata_v2.tables['project']
+metadata_v2 = MetaData(bind=engine_v2)
+s2 = sessionmaker(bind=engine_v2)()
+users_v2 = Table('users', metadata_v2, autoload=True)
+projects_v2 = Table('project', metadata_v2, autoload=True)
+licenses_v2 = Table('licenses', metadata_v2, autoload=True)
 header('Connect to v2')
+success('Connected to v2')
 
 # v3
-metadata_v3 = MetaData()
-engine_v3 = create_engine(tm2_url)
-session_v3 = sessionmaker(bind=engine_v3)()
-metadata_v3.reflect(bind=engine_v3)
-projects_v3 = metadata_v3.tables['projects']
+engine_v3 = create_engine(tm3_url)
+metadata_v3 = MetaData(bind=engine_v3)
+s3 = sessionmaker(bind=engine_v3)()
+User = reflect_table_to_declarative(metadata_v3, 'users')
+Project = reflect_table_to_declarative(metadata_v3, 'projects')
+License = reflect_table_to_declarative(metadata_v3, 'licenses')
 header('Connect to v3')
+success('Connected to v3')
 
+header('Cleaning up db')
+for c in [Project, User]:
+    s3.query(c).delete()
+s3.commit()
+success('Cleaned up')
 
-header("Importing projects")
-for project_v2 in session_v2.query(projects_v2):
+#
+# Users
+#
+count = users_v2.count().scalar()
+header('Importing %s users' % count)
+i = 0
+for user_v2 in s2.query(users_v2):
+    user = User()
+    user.id = user_v2.id
+    user.role = 0
+    user.username = user_v2.username
+    user.mapping_level = 1
+    user.tasks_mapped = 0
+    user.tasks_validated = 0
+    user.tasks_invalidated = 0
+    s3.add(user)
+    i += 1
+    printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
+s3.commit()
+
+#
+# Licenses
+#
+count = licenses_v2.count().scalar()
+header('Importing %s licenses' % count)
+i = 0
+for license_v2 in s2.query(licenses_v2):
+    license = License()
+    license.id = license_v2.id
+    s3.add(license)
+    i += 1
+    printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
+s3.commit()
+
+#
+# Projects
+#
+count = projects_v2.count().scalar()
+header('Importing %s projects' % count)
+i = 0
+for project_v2 in s2.query(projects_v2):
     project = Project()
+    project.id = project_v2.id
+    project.status = project_v2.status
+    # project.aoi_id = project_v2.area_id
     project.created = project_v2.created
-    session_v3.add(project)
+    project.priority = project_v2.priority
+    project.default_locale = 'en'  # FIXME
+    project.author_id = project_v2.author_id \
+        if project_v2.author_id is not None else 24529
+    project.mapper_level = 0
+    project.enforce_mapper_level = False
+    project.enforce_validator_role = False
 
+    project.private = project_v2.private
+    project.entities_to_map = project_v2.entities_to_map
+    project.changeset_comment = project_v2.changeset_comment
+    project.due_date = project_v2.due_date
+    project.imagery = project_v2.imagery
+    project.josm_preset = project_v2.josm_preset
+    project.last_updated = project_v2.last_update
+    project.license_id = project_v2.license_id
+
+    # Stats
+    project.total_tasks = 0
+    project.tasks_mapped = 0
+    project.tasks_validated = 0
+    project.tasks_bad_imagery = 0
+
+    s3.add(project)
+    i += 1
+    printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
+s3.commit()
