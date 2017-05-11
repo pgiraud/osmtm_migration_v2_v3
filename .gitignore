@@ -1,0 +1,22 @@
+*.py[cod]
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+bin
+var
+src
+sdist
+develop-eggs
+.installed.cfg
+lib64
+
+# virtual env
+venv
+
+# Rope
+.ropeproject

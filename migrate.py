@@ -103,7 +103,7 @@ header('Connect to v3')
 success('Connected to v3')
 
 header('Cleaning up db')
-for c in [Project, User]:
+for c in [License, Project, User]:
     s3.query(c).delete()
 s3.commit()
 success('Cleaned up')
