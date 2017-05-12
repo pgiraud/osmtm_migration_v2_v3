@@ -97,6 +97,7 @@ priority_area_v2 = Table('priority_area', metadata_v2, autoload=True)
 project_priority_areas_v2 = Table(
     'project_priority_areas', metadata_v2, autoload=True)
 tasks_v2 = Table('task', metadata_v2, autoload=True)
+task_state_v2 = Table('task_state', metadata_v2, autoload=True)
 header('Connect to v2')
 success('Connected to v2')
 
@@ -112,6 +113,7 @@ AreaOfInterest = reflect_table_to_declarative(metadata_v3, 'areas_of_interest')
 PriorityArea = reflect_table_to_declarative(metadata_v3, 'priority_areas')
 project_priority_areas_v3 = Table('project_priority_areas', metadata_v3)
 Task = reflect_table_to_declarative(metadata_v3, 'tasks')
+TaskHistory = reflect_table_to_declarative(metadata_v3, 'task_history')
 header('Connect to v3')
 success('Connected to v3')
 
@@ -308,3 +310,34 @@ if imported != count:
     failure('Not all tasks imported')
     exit(1)
 success('Tasks imported!')
+
+#
+# Tasks history
+#
+count = task_state_v2.count().scalar()
+header('Importing %s tasks history' % count)
+i = 0
+page_size = 1000
+page = 0
+total_pages = math.ceil(count / page_size)
+while page < total_pages:
+    engine_v3.execute(TaskHistory.__table__.insert(),
+                      [{
+                          'project_id': state_v2.project_id,
+                          'task_id': state_v2.task_id,
+                          'action': 3,  # STATE_CHANGE
+                          'text': '????????',
+                          'action_date': state_v2.date,
+                          'user_id': state_v2.user_id,
+                      }
+                       for state_v2 in s2.query(task_state_v2)
+                       .filter(task_state_v2.user_id.not_(None))
+                       .limit(page_size).offset(page * page_size)])
+    s3.commit()
+    page += 1
+    printProgressBar(
+        page,
+        total_pages,
+        prefix='Progress:',
+        suffix='Complete',
+        length=50)
