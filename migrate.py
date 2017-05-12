@@ -202,7 +202,7 @@ for project_v2 in s2.query(projects_v2):
     project.default_locale = 'en'  # FIXME
     project.author_id = project_v2.author_id \
         if project_v2.author_id is not None else 24529
-    project.mapper_level = 0
+    project.mapper_level = 1
     project.enforce_mapper_level = False
     project.enforce_validator_role = False
 
