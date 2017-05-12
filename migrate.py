@@ -89,6 +89,7 @@ s2 = sessionmaker(bind=engine_v2)()
 users_v2 = Table('users', metadata_v2, autoload=True)
 projects_v2 = Table('project', metadata_v2, autoload=True)
 licenses_v2 = Table('licenses', metadata_v2, autoload=True)
+areas_v2 = Table('areas', metadata_v2, autoload=True)
 header('Connect to v2')
 success('Connected to v2')
 
@@ -99,11 +100,12 @@ s3 = sessionmaker(bind=engine_v3)()
 User = reflect_table_to_declarative(metadata_v3, 'users')
 Project = reflect_table_to_declarative(metadata_v3, 'projects')
 License = reflect_table_to_declarative(metadata_v3, 'licenses')
+AreaOfInterest = reflect_table_to_declarative(metadata_v3, 'areas_of_interest')
 header('Connect to v3')
 success('Connected to v3')
 
 header('Cleaning up db')
-for c in [License, Project, User]:
+for c in [Project, License, AreaOfInterest, User]:
     s3.query(c).delete()
 s3.commit()
 success('Cleaned up')
@@ -143,6 +145,23 @@ for license_v2 in s2.query(licenses_v2):
 s3.commit()
 
 #
+# Areas of interest
+#
+count = areas_v2.count().scalar()
+header('Importing %s AOI' % count)
+i = 0
+for aoi_v2 in s2.query(areas_v2):
+    aoi = AreaOfInterest()
+    aoi.id = aoi_v2.id
+    aoi.geometry = aoi_v2.geometry
+    s3.add(aoi)
+    i += 1
+    printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
+
+    # TODO: compute centroid
+s3.commit()
+
+#
 # Projects
 #
 count = projects_v2.count().scalar()
@@ -152,7 +171,7 @@ for project_v2 in s2.query(projects_v2):
     project = Project()
     project.id = project_v2.id
     project.status = project_v2.status
-    # project.aoi_id = project_v2.area_id
+    project.aoi_id = project_v2.area_id
     project.created = project_v2.created
     project.priority = project_v2.priority
     project.default_locale = 'en'  # FIXME
