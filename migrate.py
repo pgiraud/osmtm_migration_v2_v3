@@ -89,6 +89,8 @@ metadata_v2 = MetaData(bind=engine_v2)
 s2 = sessionmaker(bind=engine_v2)()
 users_v2 = Table('users', metadata_v2, autoload=True)
 projects_v2 = Table('project', metadata_v2, autoload=True)
+project_translation_v2 = Table(
+    'project_translation', metadata_v2, autoload=True)
 licenses_v2 = Table('licenses', metadata_v2, autoload=True)
 areas_v2 = Table('areas', metadata_v2, autoload=True)
 priority_area_v2 = Table('priority_area', metadata_v2, autoload=True)
@@ -104,6 +106,7 @@ metadata_v3 = MetaData(bind=engine_v3)
 s3 = sessionmaker(bind=engine_v3)()
 User = reflect_table_to_declarative(metadata_v3, 'users')
 Project = reflect_table_to_declarative(metadata_v3, 'projects')
+ProjectInfo = reflect_table_to_declarative(metadata_v3, 'project_info')
 License = reflect_table_to_declarative(metadata_v3, 'licenses')
 AreaOfInterest = reflect_table_to_declarative(metadata_v3, 'areas_of_interest')
 PriorityArea = reflect_table_to_declarative(metadata_v3, 'priority_areas')
@@ -114,7 +117,9 @@ success('Connected to v3')
 
 header('Cleaning up db')
 project_priority_areas_v3.delete().execute()
-for c in [Task, Project, License, AreaOfInterest, PriorityArea, User]:
+for c in [
+        Task, ProjectInfo, Project, License, AreaOfInterest, PriorityArea, User
+]:
     s3.query(c).delete()
 s3.commit()
 success('Cleaned up')
@@ -220,8 +225,29 @@ for project_v2 in s2.query(projects_v2):
     project.tasks_mapped = 0
     project.tasks_validated = 0
     project.tasks_bad_imagery = 0
-
     s3.add(project)
+
+    i += 1
+    printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
+s3.commit()
+
+
+#
+# Project info
+#
+count = project_translation_v2.count().scalar()
+header('Importing project infos')
+i = 0
+for info_v2 in s2.query(project_translation_v2):
+    info = ProjectInfo()
+    info.project_id = info_v2.id
+    info.locale = info_v2.locale
+    info.name = info_v2.name
+    info.short_description =info_v2.short_description
+    info.description = info_v2.description
+    info.instructions = info_v2.instructions
+    s3.add(info)
+
     i += 1
     printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
 s3.commit()
