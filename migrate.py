@@ -280,10 +280,9 @@ s3.commit()
 count = tasks_v2.count().scalar()
 header('Importing %s tasks' % count)
 i = 0
-page_size = 1000
-page = 0
-total_pages = math.ceil(count / page_size)
-while page < total_pages:
+for project_id in s2.query(projects_v2.c.id):
+    query = s2.query(tasks_v2) \
+        .filter(tasks_v2.c.project_id==project_id)
     engine_v3.execute(Task.__table__.insert(),
                       [{
                           'id': task_v2.id,
@@ -293,14 +292,11 @@ while page < total_pages:
                           'zoom': task_v2.zoom,
                           'geometry': task_v2.geometry
                       }
-                       for task_v2 in s2.query(tasks_v2)
-                       .order_by(tasks_v2.c.project_id)
-                       .limit(page_size).offset(page * page_size)])
+                       for task_v2 in query])
     s3.commit()
-    page += 1
     printProgressBar(
-        page,
-        total_pages,
+        Task.__table__.count().scalar(),
+        count,
         prefix='Progress:',
         suffix='Complete',
         length=50)
