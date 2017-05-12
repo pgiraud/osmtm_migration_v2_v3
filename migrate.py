@@ -155,6 +155,9 @@ i = 0
 for license_v2 in s2.query(licenses_v2):
     license = License()
     license.id = license_v2.id
+    license.name = license_v2.name
+    license.description = license_v2.description
+    license.plain_text = license_v2.plain_text
     s3.add(license)
     i += 1
     printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
