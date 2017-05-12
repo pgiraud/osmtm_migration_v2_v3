@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import math
 
 from sqlalchemy import (
     create_engine, )
@@ -93,6 +94,7 @@ areas_v2 = Table('areas', metadata_v2, autoload=True)
 priority_area_v2 = Table('priority_area', metadata_v2, autoload=True)
 project_priority_areas_v2 = Table(
     'project_priority_areas', metadata_v2, autoload=True)
+tasks_v2 = Table('task', metadata_v2, autoload=True)
 header('Connect to v2')
 success('Connected to v2')
 
@@ -106,12 +108,13 @@ License = reflect_table_to_declarative(metadata_v3, 'licenses')
 AreaOfInterest = reflect_table_to_declarative(metadata_v3, 'areas_of_interest')
 PriorityArea = reflect_table_to_declarative(metadata_v3, 'priority_areas')
 project_priority_areas_v3 = Table('project_priority_areas', metadata_v3)
+Task = reflect_table_to_declarative(metadata_v3, 'tasks')
 header('Connect to v3')
 success('Connected to v3')
 
 header('Cleaning up db')
 project_priority_areas_v3.delete().execute()
-for c in [Project, License, AreaOfInterest, PriorityArea, User]:
+for c in [Task, Project, License, AreaOfInterest, PriorityArea, User]:
     s3.query(c).delete()
 s3.commit()
 success('Cleaned up')
@@ -123,6 +126,8 @@ count = users_v2.count().scalar()
 header('Importing %s users' % count)
 i = 0
 for user_v2 in s2.query(users_v2):
+    if user_v2.id != 24529:
+        continue
     user = User()
     user.id = user_v2.id
     user.role = 0
@@ -238,3 +243,40 @@ engine_v3.execute(
     } for ppa_v2 in s2.query(project_priority_areas_v2)]
 )
 s3.commit()
+
+#
+# Tasks
+#
+count = tasks_v2.count().scalar()
+header('Importing %s tasks' % count)
+i = 0
+page_size = 1000
+page = 0
+total_pages = math.ceil(count / page_size)
+while page < total_pages:
+    engine_v3.execute(Task.__table__.insert(),
+                      [{
+                          'id': task_v2.id,
+                          'project_id': task_v2.project_id,
+                          'x': task_v2.x,
+                          'y': task_v2.y,
+                          'zoom': task_v2.zoom,
+                          'geometry': task_v2.geometry
+                      }
+                       for task_v2 in s2.query(tasks_v2)
+                       .order_by(tasks_v2.c.project_id)
+                       .limit(page_size).offset(page * page_size)])
+    s3.commit()
+    page += 1
+    printProgressBar(
+        page,
+        total_pages,
+        prefix='Progress:',
+        suffix='Complete',
+        length=50)
+
+imported = Task.__table__.count().scalar()
+if imported != count:
+    failure('Not all tasks imported')
+    exit(1)
+success('Tasks imported!')
