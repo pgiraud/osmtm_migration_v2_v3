@@ -170,11 +170,10 @@ for aoi_v2 in s2.query(areas_v2):
     aoi = AreaOfInterest()
     aoi.id = aoi_v2.id
     aoi.geometry = aoi_v2.geometry
+    aoi.centroid = aoi_v2.centroid
     s3.add(aoi)
     i += 1
     printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
-
-    # TODO: compute centroid
 s3.commit()
 
 #
