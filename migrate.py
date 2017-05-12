@@ -90,6 +90,9 @@ users_v2 = Table('users', metadata_v2, autoload=True)
 projects_v2 = Table('project', metadata_v2, autoload=True)
 licenses_v2 = Table('licenses', metadata_v2, autoload=True)
 areas_v2 = Table('areas', metadata_v2, autoload=True)
+priority_area_v2 = Table('priority_area', metadata_v2, autoload=True)
+project_priority_areas_v2 = Table(
+    'project_priority_areas', metadata_v2, autoload=True)
 header('Connect to v2')
 success('Connected to v2')
 
@@ -101,11 +104,14 @@ User = reflect_table_to_declarative(metadata_v3, 'users')
 Project = reflect_table_to_declarative(metadata_v3, 'projects')
 License = reflect_table_to_declarative(metadata_v3, 'licenses')
 AreaOfInterest = reflect_table_to_declarative(metadata_v3, 'areas_of_interest')
+PriorityArea = reflect_table_to_declarative(metadata_v3, 'priority_areas')
+project_priority_areas_v3 = Table('project_priority_areas', metadata_v3)
 header('Connect to v3')
 success('Connected to v3')
 
 header('Cleaning up db')
-for c in [Project, License, AreaOfInterest, User]:
+project_priority_areas_v3.delete().execute()
+for c in [Project, License, AreaOfInterest, PriorityArea, User]:
     s3.query(c).delete()
 s3.commit()
 success('Cleaned up')
@@ -162,6 +168,20 @@ for aoi_v2 in s2.query(areas_v2):
 s3.commit()
 
 #
+# Priority Areas
+#
+count = priority_area_v2.count().scalar()
+header('Importing %s priority areas' % count)
+i = 0
+for pa_v2 in s2.query(priority_area_v2):
+    pa = PriorityArea()
+    pa.id = pa_v2.id
+    s3.add(pa)
+    i += 1
+    printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
+s3.commit()
+
+#
 # Projects
 #
 count = projects_v2.count().scalar()
@@ -199,4 +219,22 @@ for project_v2 in s2.query(projects_v2):
     s3.add(project)
     i += 1
     printProgressBar(i, count, prefix='Progress:', suffix='Complete', length=50)
+s3.commit()
+
+#
+# Project priority areas relation table
+#
+count = project_priority_areas_v2.count().scalar()
+header('Linking projects and priority areas')
+i = 0
+
+
+# See http://docs.sqlalchemy.org/en/latest/faq/performance.html#i-m-inserting-400-000-rows-with-the-orm-and-it-s-really-slow
+engine_v3.execute(
+    project_priority_areas_v3.insert(),
+    [{
+        'project_id': ppa_v2.project_id,
+        'priority_area_id': ppa_v2.priority_area_id
+    } for ppa_v2 in s2.query(project_priority_areas_v2)]
+)
 s3.commit()
